@@ -79,6 +79,8 @@ impl Miner {
                 self.priority_fee.unwrap_or(0)
             }
         };
+        
+        println!("  Priority fee: {}", priority_fee);
 
         final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(priority_fee));
         final_ixs.extend_from_slice(ixs);

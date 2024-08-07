@@ -102,6 +102,8 @@ impl Miner {
                             .unwrap(),
                         _ => return self.priority_fee.unwrap_or(0),
                     };
+                
+                println!("  Suggested priority fee: {}", calculated_fee);
 
                 // Check if the calculated fee is higher than self.dynamic_fee_max
                 if let Some(max_fee) = self.dynamic_fee_max {
