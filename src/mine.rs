@@ -130,7 +130,7 @@ impl Miner {
                             if nonce % 100 == 0 {
                                 let global_best_difficulty = *global_best_difficulty.read().unwrap();
                                 if timer.elapsed().as_secs().ge(&cutoff_time) {
-                                    if i == 0 {
+                                    if i.id == 0 {
                                         progress_bar.set_message(format!(
                                             "Mining... ({} / {} difficulty)",
                                             global_best_difficulty,
