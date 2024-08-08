@@ -50,23 +50,18 @@ pub struct ConfigArgs {}
 
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
-pub struct PauseArgs {}
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
 pub struct InitializeArgs {}
 
 #[derive(Parser, Debug)]
 pub struct MineArgs {
-    // #[cfg(not(feature = "gpu"))]
     #[arg(
         long,
         short,
-        value_name = "THREAD_COUNT",
-        help = "The number of CPU threads to allocate to mining",
+        value_name = "CORES_COUNT",
+        help = "The number of CPU cores to allocate to mining",
         default_value = "1"
     )]
-    pub threads: u64,
+    pub cores: u64,
 
     #[arg(
         long,
@@ -88,6 +83,16 @@ pub struct MineArgs {
 }
 
 #[derive(Parser, Debug)]
+pub struct ProofArgs {
+    #[arg(
+        index = 0,
+        value_name = "ADDRESS",
+        help = "The address of the proof to fetch"
+    )]
+    pub address: Option<String>,
+}
+
+#[derive(Parser, Debug)]
 pub struct RewardsArgs {}
 
 #[derive(Parser, Debug)]
@@ -105,12 +110,6 @@ pub struct StakeArgs {
         help = "Token account to send Ore from."
     )]
     pub sender: Option<String>,
-}
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-pub struct UpdateAdminArgs {
-    pub new_admin: String,
 }
 
 #[derive(Parser, Debug)]
