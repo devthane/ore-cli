@@ -1,6 +1,6 @@
 use drillx::Solution;
 use futures::prelude::*;
-use tokio::net;
+use tokio::{net, select};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_serde::formats::*;
@@ -27,15 +27,22 @@ impl Miner {
         let (sender, receiver) = mpsc::channel::<SolutionResult>(1000);
         tokio::spawn(async move {
             let Ok(listener) = net::TcpListener::bind("0.0.0.0:8000").await else {
-                panic!("failed to listen on port 8080")
+                println!("failed to listen on port 8000");
+                return;
             };
             loop {
-                if sender.is_closed() {
-                    return;
-                }
-                let Ok((stream, _)) = listener.accept().await else {
-                    println!("connection failed");
-                    continue;
+                let stream = select! {
+                    _ = sender.closed() => {
+                        break;
+                    }
+                    result = listener.accept() => {
+                        if let Ok((stream, _)) = result {
+                            stream
+                        } else {
+                            println!("connection failed");
+                            break;
+                        }
+                    }
                 };
 
                 let length_delimited = FramedRead::new(stream, LengthDelimitedCodec::new());
