@@ -77,6 +77,8 @@ impl Miner {
             let mut difficulty = solution_result.difficulty;
 
             if let Some(mut receiver) = receiver {
+                let progress_bar = Arc::new(spinner::new_progress_bar());
+                progress_bar.set_message("Waiting for solutions...");
                 loop {
                     let result = select! {
                         msg = receiver.recv() => {
@@ -93,8 +95,16 @@ impl Miner {
                         solution = result.solution;
                         difficulty = result.difficulty;
                     };
+                    progress_bar.set_message(format!(
+                        "Receiving solutions... (best difficulty: {})",
+                        difficulty
+                    ));
                 }
                 receiver.close();
+                progress_bar.finish_with_message(format!(
+                    "Best difficulty: {}",
+                    difficulty,
+                ));
             } else {
                 self.send_solution(args.forward_address.unwrap(), solution_result).await;
                 return;
