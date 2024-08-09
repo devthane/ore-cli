@@ -37,6 +37,18 @@ impl Miner {
         // Start mining loop
         let mut last_hash_at = 0;
         loop {
+            let receiver = if args.forward_address.is_none() {
+                Some(self.solution_receiver().await)
+            } else {
+                None
+            };
+            let sender = if args.forward_address.is_some() {
+                println!("waiting for host to become ready");
+                Some(self.solution_sender(args.forward_address.clone().unwrap()))
+            } else {
+                None
+            };
+             
             // Fetch proof
             let config = get_config(&self.rpc_client).await;
             let proof =
@@ -51,12 +63,6 @@ impl Miner {
 
             // Calculate cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
-            
-            let receiver = if args.forward_address.is_none() {
-                Some(self.solution_receiver().await)
-            } else {
-                None
-            };
 
             // Run drillx
             let solution_result =
@@ -98,8 +104,8 @@ impl Miner {
                     difficulty,
                 ));
             } else {
-                self.send_solution(args.forward_address.clone().unwrap(), solution_result).await;
-                println!("waiting for host to become ready");
+                sender.unwrap().await.send(solution_result).await.expect("solution send failed");
+                // make sure we don't mine too soon
                 tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW + 1)).await;
                 continue;
             }
