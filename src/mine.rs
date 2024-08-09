@@ -1,4 +1,4 @@
-use std::{sync::Arc, sync::RwLock, time::Instant};
+use std::{sync::Arc, sync::RwLock, time::{Instant, Duration}};
 
 use colored::*;
 use drillx::{
@@ -14,7 +14,7 @@ use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
-
+use tokio::select;
 use crate::{
     args::MineArgs,
     send_and_confirm::ComputeBudget,
@@ -23,6 +23,7 @@ use crate::{
     },
     Miner,
 };
+use crate::network::{NETWORK_WINDOW, SolutionResult};
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
@@ -37,6 +38,18 @@ impl Miner {
         let mut last_hash_at = 0;
         let mut last_balance = 0;
         loop {
+            let receiver = if args.forward_address.is_none() {
+                Some(self.solution_receiver().await)
+            } else {
+                None
+            };
+            let sender = if args.forward_address.is_some() {
+                println!("waiting for host to become ready");
+                Some(self.solution_sender(args.forward_address.clone().unwrap()))
+            } else {
+                None
+            };
+
             // Fetch proof
             let config = get_config(&self.rpc_client).await;
             let proof =
@@ -62,9 +75,50 @@ impl Miner {
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
             // Run drillx
-            let solution =
+            let solution_result =
                 Self::find_hash_par(proof, cutoff_time, args.cores, config.min_difficulty as u32)
                     .await;
+
+            let mut solution = solution_result.solution;
+            let mut difficulty = solution_result.difficulty;
+
+            if let Some(mut receiver) = receiver {
+                let progress_bar = Arc::new(spinner::new_progress_bar());
+                let sleep = tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW));
+                tokio::pin!(sleep);
+                progress_bar.set_message("Waiting for solutions...");
+                loop {
+                    let result = select! {
+                        msg = receiver.recv() => {
+                            if msg.is_none() {
+                                break;
+                            }
+                            msg.unwrap()
+                        }
+                        _ = &mut sleep => {
+                            break;
+                        }
+                    };
+                    if result.difficulty.gt(&difficulty) {
+                        solution = result.solution;
+                        difficulty = result.difficulty;
+                    };
+                    progress_bar.set_message(format!(
+                        "Receiving solutions... (best difficulty: {})",
+                        difficulty
+                    ));
+                }
+                receiver.close();
+                progress_bar.finish_with_message(format!(
+                    "Best difficulty: {}",
+                    difficulty,
+                ));
+            } else {
+                sender.unwrap().await.send(solution_result).await.expect("solution send failed");
+                // make sure we don't mine too soon
+                tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW + 1)).await;
+                continue;
+            }
 
             // Build instruction set
             let mut ixs = vec![ore_api::instruction::auth(proof_pubkey(signer.pubkey()))];
@@ -94,7 +148,7 @@ impl Miner {
         cutoff_time: u64,
         cores: u64,
         min_difficulty: u32,
-    ) -> Solution {
+    ) -> SolutionResult {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         let global_best_difficulty = Arc::new(RwLock::new(0u32));
@@ -200,7 +254,7 @@ impl Miner {
             best_difficulty
         ));
 
-        Solution::new(best_hash.d, best_nonce.to_le_bytes())
+        SolutionResult::new(Solution::new(best_hash.d, best_nonce.to_le_bytes()), best_difficulty)
     }
 
     pub fn check_num_cores(&self, cores: u64) {

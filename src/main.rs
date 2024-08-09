@@ -17,6 +17,7 @@ mod send_and_confirm;
 mod stake;
 mod upgrade;
 mod utils;
+mod network;
 
 use std::sync::Arc;
 
