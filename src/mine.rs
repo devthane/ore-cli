@@ -23,7 +23,7 @@ use crate::{
     },
     Miner,
 };
-use crate::network::SolutionResult;
+use crate::network::{NETWORK_WINDOW, SolutionResult};
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
@@ -78,6 +78,8 @@ impl Miner {
 
             if let Some(mut receiver) = receiver {
                 let progress_bar = Arc::new(spinner::new_progress_bar());
+                let sleep = tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW));
+                tokio::pin!(sleep);
                 progress_bar.set_message("Waiting for solutions...");
                 loop {
                     let result = select! {
@@ -87,7 +89,7 @@ impl Miner {
                             }
                             msg.unwrap()
                         }
-                        _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                        _ = &mut sleep => {
                             break;
                         }
                     };
@@ -106,8 +108,10 @@ impl Miner {
                     difficulty,
                 ));
             } else {
-                self.send_solution(args.forward_address.unwrap(), solution_result).await;
-                return;
+                self.send_solution(args.forward_address.clone().unwrap(), solution_result).await;
+                println!("waiting for host to become ready");
+                tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW + 1)).await;
+                continue;
             }
 
             // Build instruction set
