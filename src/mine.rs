@@ -1,4 +1,5 @@
-use std::{sync::Arc, sync::RwLock, time::Instant};
+use std::{sync::Arc, sync::RwLock, time::{Instant, Duration}};
+
 use colored::*;
 use drillx::{
     equix::{self},
@@ -13,7 +14,7 @@ use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
-
+use tokio::select;
 use crate::{
     args::MineArgs,
     send_and_confirm::ComputeBudget,
@@ -22,6 +23,7 @@ use crate::{
     },
     Miner,
 };
+use crate::network::SolutionResult;
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
@@ -60,10 +62,43 @@ impl Miner {
             // Calculate cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
+            let receiver = if args.forward_address.is_none() {
+                Some(self.solution_receiver().await)
+            } else {
+                None
+            };
+
             // Run drillx
-            let solution =
+            let solution_result =
                 Self::find_hash_par(proof, cutoff_time, args.cores, config.min_difficulty as u32)
                     .await;
+
+            let mut solution = solution_result.solution;
+            let mut difficulty = solution_result.difficulty;
+
+            if let Some(mut receiver) = receiver {
+                loop {
+                    let result = select! {
+                        msg = receiver.recv() => {
+                            if msg.is_none() {
+                                break;
+                            }
+                            msg.unwrap()
+                        }
+                        _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                            break;
+                        }
+                    };
+                    if result.difficulty.gt(&difficulty) {
+                        solution = result.solution;
+                        difficulty = result.difficulty;
+                    };
+                }
+                receiver.close();
+            } else {
+                self.send_solution(args.forward_address.unwrap(), solution_result).await;
+                return;
+            }
 
             // Build instruction set
             let mut ixs = vec![ore_api::instruction::auth(proof_pubkey(signer.pubkey()))];
@@ -93,7 +128,7 @@ impl Miner {
         cutoff_time: u64,
         cores: u64,
         min_difficulty: u32,
-    ) -> Solution {
+    ) -> SolutionResult {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         let global_best_difficulty = Arc::new(RwLock::new(0u32));
@@ -202,7 +237,7 @@ impl Miner {
             best_difficulty
         ));
 
-        Solution::new(best_hash.d, best_nonce.to_le_bytes())
+        SolutionResult::new(Solution::new(best_hash.d, best_nonce.to_le_bytes()), best_difficulty)
     }
 
     pub fn check_num_cores(&self, cores: u64) {

@@ -69,6 +69,14 @@ pub struct MineArgs {
         default_value = "5"
     )]
     pub buffer_time: u64,
+
+    #[arg(
+        long,
+        short,
+        value_name = "ADDRESS",
+        help = "Optional network address and port to forward solutions to instead of submitting",
+    )]
+    pub forward_address: Option<String>,
 }
 
 #[derive(Parser, Debug)]

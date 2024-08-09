@@ -18,6 +18,7 @@ mod stake;
 mod transfer;
 mod upgrade;
 mod utils;
+mod network;
 
 use std::{sync::Arc, sync::RwLock};
 use futures::StreamExt;
