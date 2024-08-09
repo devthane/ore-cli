@@ -107,6 +107,7 @@ impl Miner {
                     };
                     final_ixs.remove(1);
                     final_ixs.insert(1, ComputeBudgetInstruction::set_compute_unit_price(fee));
+                    tx = Transaction::new_with_payer(&final_ixs, Some(&fee_payer.pubkey()))
                 }
 
                 // Resign the tx
