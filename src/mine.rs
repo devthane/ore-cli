@@ -98,8 +98,8 @@ impl Miner {
                     difficulty,
                 ));
             } else {
-                self.send_solution(args.forward_address.unwrap(), solution_result).await;
-                return;
+                self.send_solution(args.forward_address.clone().unwrap(), solution_result).await;
+                continue;
             }
 
             // Build instruction set
