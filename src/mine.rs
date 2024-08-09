@@ -60,12 +60,6 @@ impl Miner {
             // Calculate cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
-            let receiver = if args.forward_address.is_none() {
-                Some(self.solution_receiver().await)
-            } else {
-                None
-            };
-
             let min_difficulty = if args.minimum_difficulty > config.min_difficulty {
                 args.minimum_difficulty
             } else {
