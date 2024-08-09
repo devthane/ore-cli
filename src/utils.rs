@@ -41,7 +41,7 @@ pub async fn get_updated_proof_with_authority(
 ) -> Proof {
     loop {
         let proof = get_proof_with_authority(client, authority).await;
-        if proof.last_hash_at.gt(&lash_hash_at) {
+        if proof.last_hash_at.ge(&lash_hash_at) {
             return proof;
         }
         std::thread::sleep(Duration::from_millis(1000));
