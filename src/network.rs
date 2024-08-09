@@ -7,6 +7,8 @@ use tokio_serde::formats::*;
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 use crate::Miner;
 
+pub const NETWORK_WINDOW: u64 = 10;
+
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SolutionResult {
     pub solution: Solution,

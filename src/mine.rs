@@ -21,7 +21,7 @@ use crate::{
     utils::{amount_u64_to_string, get_clock, get_config, get_proof_with_authority, proof_pubkey},
     Miner,
 };
-use crate::network::SolutionResult;
+use crate::network::{NETWORK_WINDOW, SolutionResult};
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
@@ -70,6 +70,8 @@ impl Miner {
 
             if let Some(mut receiver) = receiver {
                 let progress_bar = Arc::new(spinner::new_progress_bar());
+                let sleep = tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW));
+                tokio::pin!(sleep);
                 progress_bar.set_message("Waiting for solutions...");
                 loop {
                     let result = select! {
@@ -79,7 +81,7 @@ impl Miner {
                             }
                             msg.unwrap()
                         }
-                        _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                        _ = &mut sleep => {
                             break;
                         }
                     };
@@ -99,6 +101,8 @@ impl Miner {
                 ));
             } else {
                 self.send_solution(args.forward_address.clone().unwrap(), solution_result).await;
+                println!("waiting for host to become ready");
+                tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW + 1)).await;
                 continue;
             }
 
