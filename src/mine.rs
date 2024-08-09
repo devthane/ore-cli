@@ -73,10 +73,16 @@ impl Miner {
 
             // Calculate cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
+            
+            let min_difficulty = if args.minimum_difficulty > config.min_difficulty {
+                args.minimum_difficulty
+            } else {
+                config.min_difficulty
+            };
 
             // Run drillx
             let solution_result =
-                Self::find_hash_par(proof, cutoff_time, args.cores, config.min_difficulty as u32)
+                Self::find_hash_par(proof, cutoff_time, args.cores, min_difficulty as u32)
                     .await;
 
             let mut solution = solution_result.solution;

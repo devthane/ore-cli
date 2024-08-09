@@ -79,6 +79,15 @@ pub struct MineArgs {
         help = "Optional network address and port to forward solutions to instead of submitting",
     )]
     pub forward_address: Option<String>,
+
+    #[arg(
+        long,
+        short,
+        value_name = "DIFFICULTY",
+        help = "Override for the minimum difficulty",
+        default_value = "1",
+    )]
+    pub minimum_difficulty: u64,
 }
 
 #[derive(Parser, Debug)]
