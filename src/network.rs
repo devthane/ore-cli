@@ -71,15 +71,24 @@ impl Miner {
         receiver
     }
 
-    pub async fn send_solution(&self, forward_address: String, solution: SolutionResult) {
+    pub async fn solution_sender(&self, forward_address: String) -> mpsc::Sender<SolutionResult> {
         let stream = TcpStream::connect(forward_address).await.unwrap();
-        let length_delimited = FramedWrite::new(stream, LengthDelimitedCodec::new());
-        let mut serialized = tokio_serde::SymmetricallyFramed::new(length_delimited, SymmetricalJson::default());
+        
+        let (sender, mut receiver) = mpsc::channel::<SolutionResult>(1000);
+        
+        tokio::spawn(async move {
+            let solution = receiver.recv().await.unwrap();
+            receiver.close();
+            
+            let length_delimited = FramedWrite::new(stream, LengthDelimitedCodec::new());
+            let mut serialized = tokio_serde::SymmetricallyFramed::new(length_delimited, SymmetricalJson::default());
 
-        let Err(err) = serialized.send(solution).await else {
-            return;
-        };
-
-        println!("problem sending solution: {:?}", err)
+            let Err(err) = serialized.send(solution).await else {
+                return;
+            };
+            println!("problem sending solution: {:?}", err)
+        });
+        
+        sender
     }
 }
