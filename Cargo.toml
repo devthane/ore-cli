@@ -52,4 +52,15 @@ url = "2.5"
 # drillx = { path = "../drillx/drillx" }
 # ore-api = { path = "../ore/api" }
 # ore-utils = { path = "../ore/utils" }
+[profile.release]
+opt-level = "z"   # Optimize for binary size. You can use "3" for full optimizations if binary size isn't an issue.
+codegen-units = 1 # Better optimization with fewer codegen units
+lto = true        # Enable Link Time Optimization (LTO)
+debug = false     # Disable debug info to reduce binary size
+panic = 'abort'   # Reduces the binary size further by not including unwinding information
+rpath = false
+incremental = false
+overflow-checks = false
 
+[build]
+rustflags = ["-C", "target-cpu=native"]
