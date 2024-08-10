@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use chrono::Local;
 use colored::*;
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -105,9 +106,10 @@ impl Miner {
                             fee
                         }
                     };
+
                     final_ixs.remove(1);
                     final_ixs.insert(1, ComputeBudgetInstruction::set_compute_unit_price(fee));
-                    tx = Transaction::new_with_payer(&final_ixs, Some(&fee_payer.pubkey()))
+                    tx = Transaction::new_with_payer(&final_ixs, Some(&fee_payer.pubkey()));
                 }
 
                 // Resign the tx
@@ -154,6 +156,13 @@ impl Miner {
                                                 TransactionConfirmationStatus::Processed => {}
                                                 TransactionConfirmationStatus::Confirmed
                                                 | TransactionConfirmationStatus::Finalized => {
+                                                    let now = Local::now();
+                                                    let formatted_time =
+                                                        now.format("%Y-%m-%d %H:%M:%S").to_string();
+                                                    progress_bar.println(format!(
+                                                        "  Timestamp: {}",
+                                                        formatted_time
+                                                    ));
                                                     progress_bar.finish_with_message(format!(
                                                         "{} {}",
                                                         "OK".bold().green(),

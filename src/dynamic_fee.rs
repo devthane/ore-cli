@@ -74,7 +74,7 @@ impl Miner {
                     "id": "1",
                     "method": "qn_estimatePriorityFees",
                     "params": {
-                        "account": "oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ",
+                        "account": BUS_ADDRESSES[0].to_string(),
                         "last_n_blocks": 100
                     }
                 })
@@ -137,7 +137,7 @@ impl Miner {
                     })
                     .or_else(|error: serde_json::Error| {
                         Err(format!(
-                            "Failed to parse priority fee. Response: {response:?}, error: {error}"
+                            "Failed to parse priority fee response: {response:?}, error: {error}"
                         ))
                     })
             }
