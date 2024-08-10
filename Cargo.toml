@@ -64,6 +64,3 @@ panic = 'abort'   # Reduces the binary size further by not including unwinding i
 rpath = false
 incremental = false
 overflow-checks = false
-
-[build]
-rustflags = ["-C", "target-cpu=native"]
