@@ -268,7 +268,7 @@ impl Miner {
         dynamic_fee: bool,
         fee_payer_filepath: Option<String>,
         jito_client: Arc<RpcClient>,
-        tip: Arc<std::sync::RwLock<u64>>,
+        tip: Arc<RwLock<u64>>,
     ) -> Self {
         Self {
             rpc_client,

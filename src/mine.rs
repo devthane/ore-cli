@@ -1,5 +1,14 @@
-use std::{sync::Arc, sync::RwLock, time::{Instant, Duration}};
+use std::{sync::Arc, sync::RwLock, time::{Duration, Instant}};
 
+use crate::network::{ControlState, SolutionResult, NETWORK_WINDOW};
+use crate::{
+    args::MineArgs,
+    send_and_confirm::ComputeBudget,
+    utils::{
+        amount_u64_to_string, get_clock, get_config, get_updated_proof_with_authority, proof_pubkey,
+    },
+    Miner,
+};
 use colored::*;
 use drillx::{
     equix::{self},
@@ -15,15 +24,7 @@ use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
 use tokio::select;
-use crate::{
-    args::MineArgs,
-    send_and_confirm::ComputeBudget,
-    utils::{
-        amount_u64_to_string, get_clock, get_config, get_updated_proof_with_authority, proof_pubkey,
-    },
-    Miner,
-};
-use crate::network::{NETWORK_WINDOW, SolutionResult};
+use tokio::sync::broadcast::error::RecvError;
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
@@ -34,20 +35,55 @@ impl Miner {
         // Check num threads
         self.check_num_cores(args.cores);
 
+        let (mut control_receiver, solution_sender) = if let Some(address) = args.forward_address.clone() {
+            let (cr, ss) = self.connect(address).await;
+            (Some(cr), Some(ss))
+        } else {
+            (None, None)
+        };
+
+        let (control_sender, mut solution_receiver) = if args.forward_address.is_none() {
+            let (cs, sr) = self.serve().await;
+            (Some(cs), Some(sr))
+        } else {
+            (None, None)
+        };
+
         // Start mining loop
         let mut last_hash_at = 0;
         let mut last_balance = 0;
         loop {
-            let receiver = if args.forward_address.is_none() {
-                Some(self.solution_receiver().await)
+            if args.forward_address.is_some() {
+                loop {
+                    let mut receiver = control_receiver.take().unwrap();
+                    let result = receiver.recv().await;
+                    _ = control_receiver.insert(receiver);
+                    match result {
+                        Ok(s) => {
+                            match s {
+                                ControlState::Stop => {
+                                    continue
+                                }
+                                ControlState::Go => {
+                                    break;
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            match err {
+                                RecvError::Lagged(lag) => {
+                                    println!("warn: control lag: {}", lag);
+                                    continue;
+                                }
+                                RecvError::Closed => {
+                                    panic!("control receiver unexpectedly closed");
+                                }
+                            }
+                        }
+                    };
+                }
             } else {
-                None
-            };
-            let sender = if args.forward_address.is_some() {
-                println!("waiting for host to become ready");
-                Some(self.solution_sender(args.forward_address.clone().unwrap()))
-            } else {
-                None
+                _ = control_sender.clone().unwrap().send(ControlState::Go)
             };
 
             // Fetch proof
@@ -88,7 +124,7 @@ impl Miner {
             let mut solution = solution_result.solution;
             let mut difficulty = solution_result.difficulty;
 
-            if let Some(mut receiver) = receiver {
+            if let Some(mut receiver) = solution_receiver.take() {
                 let progress_bar = Arc::new(spinner::new_progress_bar());
                 let sleep = tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW));
                 tokio::pin!(sleep);
@@ -96,10 +132,22 @@ impl Miner {
                 loop {
                     let result = select! {
                         msg = receiver.recv() => {
-                            if msg.is_none() {
-                                break;
+                            match msg {
+                                Ok(sr) => {
+                                    sr
+                                }
+                                Err(err) => {
+                                    match err {
+                                        RecvError::Closed => {
+                                            break;
+                                        }
+                                        RecvError::Lagged(lag) => {
+                                            println!("solution receiver lagged: {}", lag);
+                                            continue;
+                                        }
+                                    }
+                                }
                             }
-                            msg.unwrap()
                         }
                         _ = &mut sleep => {
                             break;
@@ -114,15 +162,19 @@ impl Miner {
                         difficulty
                     ));
                 }
-                receiver.close();
                 progress_bar.finish_with_message(format!(
                     "Best difficulty: {}",
                     difficulty,
                 ));
+                _ = solution_receiver.insert(receiver);
+                _ = control_sender.clone().unwrap().send(ControlState::Stop);
             } else {
-                sender.unwrap().await.send(solution_result).await.expect("solution send failed");
-                // make sure we don't mine too soon
-                tokio::time::sleep(Duration::from_secs(NETWORK_WINDOW + 1)).await;
+                match solution_sender.clone().unwrap().send(solution_result) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        panic!("failed to send solution result: {:?}", err);
+                    }
+                };
                 continue;
             }
 
