@@ -2834,8 +2834,8 @@ dependencies = [
  "spl-token",
  "tokio",
  "tokio-serde",
- "tokio-util",
  "tokio-tungstenite 0.16.1",
+ "tokio-util",
  "url",
 ]
 
