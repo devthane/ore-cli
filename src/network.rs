@@ -22,13 +22,15 @@ pub enum ControlState {
 pub struct SolutionResult {
     pub solution: Solution,
     pub difficulty: u32,
+    pub hash_rate: Option<u32>,
 }
 
 impl SolutionResult {
-    pub fn new(solution: Solution, difficulty: u32) -> Self {
+    pub fn new(solution: Solution, difficulty: u32, hash_rate: u32) -> Self {
         SolutionResult {
             solution,
             difficulty,
+            hash_rate: Some(hash_rate),
         }
     }
 }

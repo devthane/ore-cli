@@ -22,7 +22,7 @@ use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{sync::Arc, sync::RwLock, time::{Duration, Instant}};
 use tokio::select;
 use tokio::sync::broadcast::error::RecvError;
 
@@ -123,6 +123,7 @@ impl Miner {
 
             let mut solution = solution_result.solution;
             let mut difficulty = solution_result.difficulty;
+            let mut hash_rate = solution_result.hash_rate.unwrap();
 
             if let Some(mut receiver) = solution_receiver.take() {
                 let progress_bar = Arc::new(spinner::new_progress_bar());
@@ -153,6 +154,10 @@ impl Miner {
                             break;
                         }
                     };
+
+                    if let Some(rate) = result.hash_rate {
+                        hash_rate += rate;
+                    }
                     if result.difficulty.gt(&difficulty) {
                         solution = result.solution;
                         difficulty = result.difficulty;
@@ -163,8 +168,9 @@ impl Miner {
                     ));
                 }
                 progress_bar.finish_with_message(format!(
-                    "Best difficulty: {}",
+                    "Best difficulty: {}\n Hash Rate: {}",
                     difficulty,
+                    hash_rate,
                 ));
                 _ = solution_receiver.insert(receiver);
                 _ = control_sender.clone().unwrap().send(ControlState::Stop);
@@ -210,6 +216,8 @@ impl Miner {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         let global_best_difficulty = Arc::new(AtomicU32::new(0));
+        let hashes = Arc::new(RwLock::new(0u32));
+        let start_time = tokio::time::Instant::now();
         progress_bar.set_message("Mining...");
         let core_ids = core_affinity::get_core_ids().unwrap();
         let handles: Vec<_> = core_ids
@@ -220,6 +228,7 @@ impl Miner {
                     let progress_bar = progress_bar.clone();
                     let mut memory = equix::SolverMemory::new();
                     let global_best_difficulty = Arc::clone(&global_best_difficulty);
+                    let global_hashes = hashes.clone();
                     move || {
                         // Return if core should not be used
                         if (i.id as u64).ge(&cores) {
@@ -253,6 +262,7 @@ impl Miner {
                                     }
                                 }
                             }
+                            *global_hashes.write().unwrap() += 1;
 
                             // Exit if time has elapsed
                             if nonce % 100 == 0 {
@@ -291,6 +301,9 @@ impl Miner {
             })
             .collect();
 
+        let hash_time = start_time.elapsed();
+        let hash_rate = (*hashes.read().unwrap() as f64 / hash_time.as_secs_f64()).round() as u32;
+
         // Join handles and return best nonce
         let mut best_nonce = 0;
         let mut best_difficulty = 0;
@@ -312,7 +325,9 @@ impl Miner {
             best_difficulty
         ));
 
-        SolutionResult::new(Solution::new(best_hash.d, best_nonce.to_le_bytes()), best_difficulty)
+        SolutionResult::new(
+            Solution::new(best_hash.d, best_nonce.to_le_bytes()), best_difficulty, hash_rate,
+        )
     }
 
     pub fn check_num_cores(&self, cores: u64) {
