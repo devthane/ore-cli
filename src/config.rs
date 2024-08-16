@@ -1,4 +1,5 @@
 use colored::Colorize;
+use ore_api::consts::EPOCH_DURATION;
 
 use crate::{
     utils::{amount_u64_to_string, get_config},
@@ -16,5 +17,6 @@ impl Miner {
             "Top stake".bold(),
             amount_u64_to_string(config.top_balance)
         );
+        println!("{}: {} sec", "Epoch time".bold(), EPOCH_DURATION);
     }
 }
