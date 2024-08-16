@@ -317,6 +317,10 @@ impl Miner {
                 }
             }
         }
+        let hash_time = start_time.elapsed();
+        let hashes = *hashes.read().unwrap();
+        let hash_rate = (hashes as f64 / hash_time.as_secs_f64()).round() as u32;
+        println!("hashes: {}, hash_rate: {}", hashes, hash_rate);
 
         // Update log
         progress_bar.finish_with_message(format!(
