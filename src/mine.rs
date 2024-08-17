@@ -215,11 +215,11 @@ impl Miner {
         let handles: Vec<_> = core_ids
             .into_iter()
             .map(|i| {
-                let global_best_difficulty = Arc::clone(&global_best_difficulty);
                 std::thread::spawn({
                     let proof = proof.clone();
                     let progress_bar = progress_bar.clone();
                     let mut memory = equix::SolverMemory::new();
+                    let global_best_difficulty = Arc::clone(&global_best_difficulty);
                     move || {
                         // Return if core should not be used
                         if (i.id as u64).ge(&cores) {
