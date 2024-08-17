@@ -22,7 +22,7 @@ use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::{sync::Arc, sync::RwLock, time::{Duration, Instant}};
+use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::select;
 use tokio::sync::broadcast::error::RecvError;
 
