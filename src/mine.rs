@@ -216,7 +216,7 @@ impl Miner {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         let global_best_difficulty = Arc::new(AtomicU32::new(0));
-        let hashes = Arc::new(RwLock::new(0u32));
+        let hashes = Arc::new(AtomicU32::new(0));
         let start_time = tokio::time::Instant::now();
         progress_bar.set_message("Mining...");
         let core_ids = core_affinity::get_core_ids().unwrap();
@@ -262,7 +262,7 @@ impl Miner {
                                     }
                                 }
                             }
-                            *global_hashes.write().unwrap() += 1;
+                            global_hashes.fetch_add(1, Ordering::Relaxed);
 
                             // Exit if time has elapsed
                             if nonce % 100 == 0 {
@@ -300,10 +300,7 @@ impl Miner {
                 })
             })
             .collect();
-
-        let hash_time = start_time.elapsed();
-        let hash_rate = (*hashes.read().unwrap() as f64 / hash_time.as_secs_f64()).round() as u32;
-
+        
         // Join handles and return best nonce
         let mut best_nonce = 0;
         let mut best_difficulty = 0;
@@ -318,7 +315,7 @@ impl Miner {
             }
         }
         let hash_time = start_time.elapsed();
-        let hashes = *hashes.read().unwrap();
+        let hashes = hashes.load(Ordering::Relaxed);
         let hash_rate = (hashes as f64 / hash_time.as_secs_f64()).round() as u32;
         println!("hashes: {}, hash_rate: {}", hashes, hash_rate);
 
