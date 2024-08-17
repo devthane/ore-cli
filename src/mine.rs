@@ -1,5 +1,3 @@
-use std::{sync::Arc, sync::RwLock, time::{Duration, Instant}};
-
 use crate::network::{ControlState, SolutionResult, NETWORK_WINDOW};
 use crate::{
     args::MineArgs,
@@ -23,6 +21,8 @@ use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::select;
 use tokio::sync::broadcast::error::RecvError;
 
@@ -209,7 +209,7 @@ impl Miner {
     ) -> SolutionResult {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
-        let global_best_difficulty = Arc::new(RwLock::new(0u32));
+        let global_best_difficulty = Arc::new(AtomicU32::new(0));
         progress_bar.set_message("Mining...");
         let core_ids = core_affinity::get_core_ids().unwrap();
         let handles: Vec<_> = core_ids
@@ -247,19 +247,16 @@ impl Miner {
                                     best_nonce = nonce;
                                     best_difficulty = difficulty;
                                     best_hash = hx;
-                                    // {{ edit_1 }}
-                                    if best_difficulty.gt(&*global_best_difficulty.read().unwrap())
-                                    {
-                                        *global_best_difficulty.write().unwrap() = best_difficulty;
+                                    let current_best = global_best_difficulty.load(Ordering::Acquire);
+                                    if best_difficulty.gt(&current_best) {
+                                        global_best_difficulty.store(best_difficulty, Ordering::Release);
                                     }
-                                    // {{ edit_1 }}
                                 }
                             }
 
                             // Exit if time has elapsed
                             if nonce % 100 == 0 {
-                                let global_best_difficulty =
-                                    *global_best_difficulty.read().unwrap();
+                                let global_best_difficulty = global_best_difficulty.load(Ordering::Acquire);
                                 if timer.elapsed().as_secs().ge(&cutoff_time) {
                                     if i.id == 0 {
                                         progress_bar.set_message(format!(
