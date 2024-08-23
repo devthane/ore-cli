@@ -245,12 +245,15 @@ impl Miner {
                         let mut best_difficulty = 0;
                         let mut best_hash = Hash::default();
                         loop {
-                            // Create hash
-                            if let Ok(hx) = drillx::hash_with_memory(
+                            // Get hashes
+                            let hxs = drillx::hashes_with_memory(
                                 &mut memory,
                                 &proof.challenge,
                                 &nonce.to_le_bytes(),
-                            ) {
+                            );
+
+                            // Look for best difficulty score in all hashes
+                            for hx in hxs {
                                 let difficulty = hx.difficulty();
                                 if difficulty.gt(&best_difficulty) {
                                     best_nonce = nonce;
@@ -300,7 +303,7 @@ impl Miner {
                 })
             })
             .collect();
-        
+
         // Join handles and return best nonce
         let mut best_nonce = 0;
         let mut best_difficulty = 0;

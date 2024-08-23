@@ -50,7 +50,7 @@ pub async fn get_updated_proof_with_authority(
         if proof.last_hash_at.ge(&lash_hash_at) {
             return proof;
         }
-        std::thread::sleep(Duration::from_millis(1000));
+        tokio::time::sleep(Duration::from_millis(1_000)).await;
     }
 }
 
